@@ -740,10 +740,39 @@ robyn_run <- function(InputCollect,
       }
       dt_scurvePlotMean[, solID := uniqueSol[j]]
 
-      p4 <- ggplot(data = dt_scurvePlot[channel %in% InputCollect$paid_media_vars], aes(x = spend, y = response, color = channel)) +
-        geom_line() +
-        geom_point(data = dt_scurvePlotMean, aes(x = mean_spend, y = mean_response, color = channel)) +
-        geom_text(data = dt_scurvePlotMean, aes(x = mean_spend, y = mean_response, label = round(mean_spend, 0)), show.legend = FALSE, hjust = -0.2) +
+      #####################
+      ### DJ play start ###
+      #####################
+      
+      # p4 <- ggplot(data = dt_scurvePlot[channel %in% InputCollect$paid_media_vars], aes(x = spend, y = response, color = channel)) +
+      #   geom_line() +
+      #   geom_point(data = dt_scurvePlotMean, aes(x = mean_spend, y = mean_response, color = channel)) +
+      #   geom_text(data = dt_scurvePlotMean, aes(x = mean_spend, y = mean_response, label = round(mean_spend, 0)), show.legend = FALSE, hjust = -0.2) +
+      #   theme(legend.position = c(0.9, 0.2)) +
+      #   labs(
+      #     title = "Response curve and mean spend by channel",
+      #     subtitle = paste0(
+      #       "rsq_train: ", rsq_train_plot,
+      #       ", nrmse = ", nrmse_plot,
+      #       ", decomp.rssd = ", decomp_rssd_plot,
+      #       ", mape.lift = ", mape_lift_plot
+      #     ),
+      #     x = "Spend", y = "response"
+      #   )
+      
+      dave = dt_scurvePlot[channel %in% InputCollect$paid_media_vars]
+      dave = dave %>% group_by(channel) %>% mutate(response_norm= response /max(response))
+      dave = dave %>% group_by(channel) %>% mutate(spend_norm= spend /max(spend))
+      
+      # need alpha and gamma per each channel
+      
+      p4 <- ggplot(data = dave, aes(x = spend_norm, y = response_norm, color = channel)) +
+        # p4v2 <- ggplot(data = dave, aes(x = spend_norm, y = response_norm, color = channel)) +
+        # p4v2 <- ggplot(data = dave, aes(x = spend_norm, y = response, color = channel)) +
+        # geom_line() +
+        geom_point() +
+        # geom_point(data = dt_scurvePlotMean, aes(x = mean_spend, y = mean_response, color = channel)) +
+        # geom_text(data = dt_scurvePlotMean, aes(x = mean_spend, y = mean_response, label = round(mean_spend, 0)), show.legend = FALSE, hjust = -0.2) +
         theme(legend.position = c(0.9, 0.2)) +
         labs(
           title = "Response curve and mean spend by channel",
@@ -753,8 +782,13 @@ robyn_run <- function(InputCollect,
             ", decomp.rssd = ", decomp_rssd_plot,
             ", mape.lift = ", mape_lift_plot
           ),
-          x = "Spend", y = "response"
+          x = "Normalised Spend", y = "Normalised response"
         )
+      # print(p4)
+      
+      ###################
+      ### DJ play end ###
+      ###################
 
       ## plot fitted vs actual
 
@@ -810,7 +844,7 @@ robyn_run <- function(InputCollect,
 
       ## save and aggregate one-pager plots
 
-      onepagerTitle <- paste0("Model one-pager, on pareto front ", pf, ", ID: ", uniqueSol[j])
+      onepagerTitle <- paste0("Resonance one-pager, on pareto front ", pf, ", ID: ", uniqueSol[j])
 
       pg <- wrap_plots(p2, p5, p1, p4, p3, p6, ncol = 2) +
         plot_annotation(title = onepagerTitle, theme = theme(plot.title = element_text(hjust = 0.5)))
