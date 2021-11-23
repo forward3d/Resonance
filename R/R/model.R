@@ -55,7 +55,8 @@ robyn_run <- function(InputCollect,
                       dt_hyper_fixed = NULL,
                       seed = 123L,
                       csv_out = "pareto",
-                      ui = FALSE) {
+                      ui = FALSE,
+                      regression_methodology = "lame_way") {
 
   #####################################
   #### Set local environment
@@ -118,7 +119,8 @@ robyn_run <- function(InputCollect,
       # ,cores = cores
       # ,optimizer_name = InputCollect$nevergrad_algo
       lambda_fixed = dt_hyper_fixed$lambda,
-      seed = seed
+      seed = seed,
+      regression_methodology
     )
 
     model_output_collect[[1]]$trial <- 1
@@ -162,7 +164,8 @@ robyn_run <- function(InputCollect,
         InputCollect = InputCollect,
         lambda_control = lambda_control,
         refresh = refresh,
-        seed = seed
+        seed = seed,
+        regression_methodology = regression_methodology
       )
 
       check_coef0 <- any(model_output$resultCollect$decompSpendDist$decomp.rssd == Inf)
@@ -760,29 +763,33 @@ robyn_run <- function(InputCollect,
       #     x = "Spend", y = "response"
       #   )
       
-      dave = dt_scurvePlot[channel %in% InputCollect$paid_media_vars]
-      dave = dave %>% group_by(channel) %>% mutate(response_norm= response /max(response))
-      dave = dave %>% group_by(channel) %>% mutate(spend_norm= spend /max(spend))
+      med_list = list()
+      med_list[['x']] = seq(0,1,0.001)
+      for (med in 1:length(InputCollect$paid_media_vars)) {
+        med_select <- InputCollect$paid_media_vars[med]
+        alpha <- hypParam[paste0(InputCollect$paid_media_vars[med], "_alphas")]
+        gamma <- hypParam[paste0(InputCollect$paid_media_vars[med], "_gammas")]
+        med_list[[med_select]] = saturation_hill(x = med_list[['x']], alpha = alpha, gamma = gamma)
+      }
       
-      # need alpha and gamma per each channel
+      dave = as.data.frame(med_list)
+      dave_melt = dave %>% data.table::as.data.table() %>% data.table::melt(id.vars='x',variable.name='channel',value.name='response')
       
-      p4 <- ggplot(data = dave, aes(x = spend_norm, y = response_norm, color = channel)) +
-        # p4v2 <- ggplot(data = dave, aes(x = spend_norm, y = response_norm, color = channel)) +
-        # p4v2 <- ggplot(data = dave, aes(x = spend_norm, y = response, color = channel)) +
-        # geom_line() +
-        geom_point() +
+      p4 <- ggplot(data = dave_melt, aes(x = x, y = response, color = channel)) +
+        geom_line() +
+        # geom_point() +
         # geom_point(data = dt_scurvePlotMean, aes(x = mean_spend, y = mean_response, color = channel)) +
         # geom_text(data = dt_scurvePlotMean, aes(x = mean_spend, y = mean_response, label = round(mean_spend, 0)), show.legend = FALSE, hjust = -0.2) +
         theme(legend.position = c(0.9, 0.2)) +
         labs(
-          title = "Response curve and mean spend by channel",
+          title = "saturation curves per channel",
           subtitle = paste0(
             "rsq_train: ", rsq_train_plot,
             ", nrmse = ", nrmse_plot,
             ", decomp.rssd = ", decomp_rssd_plot,
             ", mape.lift = ", mape_lift_plot
           ),
-          x = "Normalised Spend", y = "Normalised response"
+          x = "Normalised Spend", y = "Normalised Response"
         )
       # print(p4)
       
@@ -836,11 +843,37 @@ robyn_run <- function(InputCollect,
         )
 
       ## plot diagnostic: fitted vs residual
+      
+      #####################
+      ### DJ play start ###
+      #####################
 
-      p6 <- qplot(x = predicted, y = actual - predicted, data = xDecompVecPlot) +
+      # p6 <- qplot(x = predicted, y = actual - predicted, data = xDecompVecPlot) +
+      #   geom_hline(yintercept = 0) +
+      #   geom_smooth(se = TRUE, method = "loess", formula = "y ~ x") +
+      #   xlab("fitted") + ylab("resid") + ggtitle("fitted vs. residual")
+      
+      actuals_iqr = IQR(xDecompVecPlot$actual)
+      actuals_1qr = summary(xDecompVecPlot$actual)[[2]]
+      actuals_3qr = summary(xDecompVecPlot$actual)[[5]]
+      
+      LowerInnerFence <- actuals_1qr - 1.5 * actuals_iqr
+      UpperInnerFence <- actuals_3qr + 1.5 * actuals_iqr
+      keep_indices = which(xDecompVecPlot$actual < UpperInnerFence & xDecompVecPlot$actual > LowerInnerFence)
+      
+      x = xDecompVecPlot$predicted[keep_indices]
+      y = xDecompVecPlot$actual[keep_indices] - xDecompVecPlot$predicted[keep_indices]
+      
+      
+      p6 <- qplot(x = x, y = y) +
         geom_hline(yintercept = 0) +
         geom_smooth(se = TRUE, method = "loess", formula = "y ~ x") +
         xlab("fitted") + ylab("resid") + ggtitle("fitted vs. residual")
+      print(p6)
+      
+      ###################
+      ### DJ play end ###
+      ###################
 
       ## save and aggregate one-pager plots
 
@@ -955,7 +988,8 @@ robyn_mmm <- function(hyper_collect,
                       lambda_control = 1,
                       lambda_fixed = NULL,
                       refresh = FALSE,
-                      seed = 123L) {
+                      seed = 123L,
+                      regression_methodology) {
   if (reticulate::py_module_available("nevergrad")) {
     ng <- reticulate::import("nevergrad", delay_load = TRUE)
     if (is.integer(seed)) {
@@ -1291,9 +1325,9 @@ robyn_mmm <- function(hyper_collect,
 
           ## if no lift calibration, refit using best lambda
           if (hyper_fixed == FALSE) {
-            mod_out <- model_refit(x_train, y_train, lambda = lambda, lower.limits, upper.limits)
+            mod_out <- model_refit(x_train, y_train, lambda = lambda, lower.limits, upper.limits, regression_methodology)
           } else {
-            mod_out <- model_refit(x_train, y_train, lambda = lambda_fixed[i], lower.limits, upper.limits)
+            mod_out <- model_refit(x_train, y_train, lambda = lambda_fixed[i], lower.limits, upper.limits, regression_methodology)
             lambda <- lambda_fixed[i]
           }
 
@@ -1860,63 +1894,125 @@ calibrate_mmm <- function(decompCollect, calibration_input, paid_media_vars, day
 }
 
 
-model_refit <- function(x_train, y_train, lambda, lower.limits, upper.limits) {
-  mod <- glmnet(
-    x_train,
-    y_train,
-    family = "gaussian",
-    alpha = 0, # 0 for ridge regression
-    # https://stats.stackexchange.com/questions/138569/why-is-lambda-within-one-standard-error-from-the-minimum-is-a-recommended-valu
-    lambda = lambda,
-    lower.limits = lower.limits,
-    upper.limits = upper.limits
-  ) # coef(mod)
-
-  ## drop intercept if negative
-  if (coef(mod)[1] < 0) {
+model_refit <- function(x_train, y_train, lambda, lower.limits, upper.limits, regression_methodology) {
+  
+  if (regression_methodology == 'lame_way') {
     mod <- glmnet(
       x_train,
       y_train,
       family = "gaussian",
-      alpha = 0 # 0 for ridge regression
-      , lambda = lambda,
+      alpha = 0, # 0 for ridge regression
+      # https://stats.stackexchange.com/questions/138569/why-is-lambda-within-one-standard-error-from-the-minimum-is-a-recommended-valu
+      lambda = lambda,
       lower.limits = lower.limits,
-      upper.limits = upper.limits,
-      intercept = FALSE
+      upper.limits = upper.limits
     ) # coef(mod)
-  } # ; plot(mod); print(mod)
+  
+    ## drop intercept if negative
+    if (coef(mod)[1] < 0) {
+      mod <- glmnet(
+        x_train,
+        y_train,
+        family = "gaussian",
+        alpha = 0 # 0 for ridge regression
+        , lambda = lambda,
+        lower.limits = lower.limits,
+        upper.limits = upper.limits,
+        intercept = FALSE
+      ) # coef(mod)
+    } # ; plot(mod); print(mod)
+  
+    df.int <- ifelse(coef(mod)[1] < 0, 0, 1)
+  
+    y_trainPred <- predict(mod, s = lambda, newx = x_train)
+    rsq_train <- get_rsq(true = y_train, predicted = y_trainPred, p = ncol(x_train), df.int = df.int)
+    rsq_train
+  
+    # y_testPred <- predict(mod, s = lambda, newx = x_test)
+    # rsq_test <- get_rsq(true = y_test, predicted = y_testPred); rsq_test
+  
+    # mape_mod<- mean(abs((y_test - y_testPred)/y_test)* 100); mape_mod
+    coefs <- as.matrix(coef(mod))
+    # y_pred <- c(y_trainPred, y_testPred)
+  
+    # mean(y_train) sd(y_train)
+    nrmse_train <- sqrt(mean((y_train - y_trainPred)^2)) / (max(y_train) - min(y_train))
+    # nrmse_test <- sqrt(mean(sum((y_test - y_testPred)^2))) /
+    # (max(y_test) - min(y_test)) # mean(y_test) sd(y_test)
+  
+    mod_out <- list(
+      rsq_train = rsq_train
+      # ,rsq_test = rsq_test
+      , nrmse_train = nrmse_train
+      # ,nrmse_test = nrmse_test
+      # ,mape_mod = mape_mod
+      , coefs = coefs,
+      y_pred = y_trainPred,
+      mod = mod,
+      df.int = df.int
+    )
+  
+    return(mod_out)}
+  else if (regression_methodology == 'dave_way') {
+    library(ConsReg)
+    
+    # little function to stop ConsReg outputting a load of junk
+    # taken from https://stackoverflow.com/a/49945753/7535311
+    hush=function(code){
+      sink("/dev/null")
+      tmp = code
+      sink()
+      return(tmp)
+    }
+    
+    ConsReg_df = as.data.frame(cbind(x_train, y_train))
+    f <- reformulate(setdiff(colnames(ConsReg_df), "y_train"), response="y_train")
+    mod_cons = hush(ConsReg(formula = f, family = 'gaussian',
+                       optimizer = 'solnp',
+                       data = ConsReg_df,
+                       # constraints = 'impr_Pinterest > 0, impr_TikTok > 0.1',
+                       LOWER = -9E9,
+                       UPPER = 9E9))
+    df.int_cons = 1
+    
+    if (coef(mod_cons)["(Intercept)"] < 0) {
+      f <- reformulate(setdiff(colnames(ConsReg_df), "y_train"), response="y_train", intercept=FALSE)
+      mod_cons = hush(ConsReg(formula = f,
+                         family = 'gaussian',
+                         optimizer = 'solnp',
+                         data = ConsReg_df,
+                         # constraints = 'impr_Pinterest > 0, impr_TikTok > 0.1',
+                         LOWER = -9E9,
+                         UPPER = 9E9))
+      df.int_cons = 0
+    }
 
-  df.int <- ifelse(coef(mod)[1] < 0, 0, 1)
-
-  y_trainPred <- predict(mod, s = lambda, newx = x_train)
-  rsq_train <- get_rsq(true = y_train, predicted = y_trainPred, p = ncol(x_train), df.int = df.int)
-  rsq_train
-
-  # y_testPred <- predict(mod, s = lambda, newx = x_test)
-  # rsq_test <- get_rsq(true = y_test, predicted = y_testPred); rsq_test
-
-  # mape_mod<- mean(abs((y_test - y_testPred)/y_test)* 100); mape_mod
-  coefs <- as.matrix(coef(mod))
-  # y_pred <- c(y_trainPred, y_testPred)
-
-  # mean(y_train) sd(y_train)
-  nrmse_train <- sqrt(mean((y_train - y_trainPred)^2)) / (max(y_train) - min(y_train))
-  # nrmse_test <- sqrt(mean(sum((y_test - y_testPred)^2))) /
-  # (max(y_test) - min(y_test)) # mean(y_test) sd(y_test)
-
-  mod_out <- list(
-    rsq_train = rsq_train
-    # ,rsq_test = rsq_test
-    , nrmse_train = nrmse_train
-    # ,nrmse_test = nrmse_test
-    # ,mape_mod = mape_mod
-    , coefs = coefs,
-    y_pred = y_trainPred,
-    mod = mod,
-    df.int = df.int
-  )
-
-  return(mod_out)
+    y_trainPred_cons <- predict(mod_cons, newdata=as.data.frame(x_train))
+    rsq_train_cons <- get_rsq(true = y_train, predicted = y_trainPred_cons, p = ncol(x_train), df.int = df.int_cons)
+    rsq_train_cons
+    
+    coefs_cons = coef(mod_cons)
+    if ("(Intercept)" %in% names(coefs_cons) == FALSE) {
+      coefs_cons = c("(Intercept)"=0, coefs_cons)
+    }
+    coefs_cons <- as.matrix(coefs_cons)
+    
+    colnames(coefs_cons) = 's0' # keep it the same as glmnet as robyn code referneces it later
+    nrmse_train_cons <- sqrt(mean((y_train - y_trainPred_cons)^2)) / (max(y_train) - min(y_train))
+    
+    mod_out_cons <- list(
+      rsq_train = rsq_train_cons
+      , nrmse_train = nrmse_train_cons
+      , coefs = coefs_cons,
+      y_pred = y_trainPred_cons,
+      mod = mod_cons,
+      df.int = df.int_cons
+    )
+    return(mod_out_cons)
+  }
+  else {
+    stop("regression_methodology must be either 'lame_way' or 'dave_way")
+  }
 }
 
 ridge_lambda <- function(x,
