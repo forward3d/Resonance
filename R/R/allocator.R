@@ -99,7 +99,9 @@ robyn_allocator <- function(robyn_object = NULL,
                             channel_constr_up = 2,
                             maxeval = 100000,
                             constr_mode = "eq",
-                            ui = FALSE) {
+                            ui = FALSE,
+                            plot_graphs = TRUE,
+                            save_csv = TRUE) {
 
   #####################################
   #### Set local environment
@@ -513,172 +515,177 @@ robyn_allocator <- function(robyn_object = NULL,
   dt_optimOut[, optmResponseUnitTotalLift := (optmResponseUnitTotal / initResponseUnitTotal) - 1]
   # print(dt_optimOut)
 
-  ## plot allocator results
-
-  plotDT_total <- copy(dt_optimOut) # plotDT_total <- optim_result$dt_optimOut
-
-  # ROI comparison plot
-
-  plotDT_roi <- plotDT_total[, c("channels", "initRoiUnit", "optmRoiUnit")][order(rank(channels))]
-  plotDT_roi[, channels := as.factor(channels)]
-  chn_levels <- plotDT_roi[, as.character(channels)]
-  plotDT_roi[, channels := factor(channels, levels = chn_levels)]
-  setnames(plotDT_roi, names(plotDT_roi), new = c("channel", "initial roi", "optimised roi"))
-
-
-  plotDT_roi <- suppressWarnings(melt.data.table(plotDT_roi, id.vars = "channel", value.name = "roi"))
-  p11 <- ggplot(plotDT_roi, aes(x = channel, y = roi, fill = variable)) +
-    geom_bar(stat = "identity", width = 0.5, position = "dodge") +
-    coord_flip() +
-    scale_fill_brewer(palette = "Paired") +
-    geom_text(aes(label = round(roi, 2), hjust = 1, size = 2.0),
-      position = position_dodge(width = 0.5), fontface = "bold", show.legend = FALSE
-    ) +
-    theme(
-      legend.title = element_blank(), legend.position = c(0.9, 0.2),
-      axis.text.x = element_blank(), legend.background = element_rect(
-        colour = "grey", fill = "transparent"
+  if (isTRUE(plot_graphs)){
+  
+    ## plot allocator results
+  
+    plotDT_total <- copy(dt_optimOut) # plotDT_total <- optim_result$dt_optimOut
+  
+    # ROI comparison plot
+  
+    plotDT_roi <- plotDT_total[, c("channels", "initRoiUnit", "optmRoiUnit")][order(rank(channels))]
+    plotDT_roi[, channels := as.factor(channels)]
+    chn_levels <- plotDT_roi[, as.character(channels)]
+    plotDT_roi[, channels := factor(channels, levels = chn_levels)]
+    setnames(plotDT_roi, names(plotDT_roi), new = c("channel", "initial roi", "optimised roi"))
+  
+  
+    plotDT_roi <- suppressWarnings(melt.data.table(plotDT_roi, id.vars = "channel", value.name = "roi"))
+    p11 <- ggplot(plotDT_roi, aes(x = channel, y = roi, fill = variable)) +
+      geom_bar(stat = "identity", width = 0.5, position = "dodge") +
+      coord_flip() +
+      scale_fill_brewer(palette = "Paired") +
+      geom_text(aes(label = round(roi, 2), hjust = 1, size = 2.0),
+        position = position_dodge(width = 0.5), fontface = "bold", show.legend = FALSE
+      ) +
+      theme(
+        legend.title = element_blank(), legend.position = c(0.9, 0.2),
+        axis.text.x = element_blank(), legend.background = element_rect(
+          colour = "grey", fill = "transparent"
+        )
+      ) +
+      labs(
+        title = "Initial vs. optimised mean ROI",
+        subtitle = paste0(
+          "Total spend increases ", plotDT_total[
+            , round(mean(optmSpendUnitTotalDelta) * 100, 1)
+          ], "%",
+          "\nTotal response increases ", plotDT_total[
+            , round(mean(optmResponseUnitTotalLift) * 100, 1)
+          ], "% with optimised spend allocation"
+        ),
+        y = "", x = "Channels"
       )
-    ) +
-    labs(
-      title = "Initial vs. optimised mean ROI",
-      subtitle = paste0(
-        "Total spend increases ", plotDT_total[
-          , round(mean(optmSpendUnitTotalDelta) * 100, 1)
-        ], "%",
-        "\nTotal response increases ", plotDT_total[
-          , round(mean(optmResponseUnitTotalLift) * 100, 1)
-        ], "% with optimised spend allocation"
-      ),
-      y = "", x = "Channels"
-    )
-
-  # Response comparison plot
-  plotDT_resp <- plotDT_total[, c("channels", "initResponseUnit", "optmResponseUnit")][order(rank(channels))]
-  plotDT_resp[, channels := as.factor(channels)]
-  chn_levels <- plotDT_resp[, as.character(channels)]
-  plotDT_resp[, channels := factor(channels, levels = chn_levels)]
-  setnames(plotDT_resp, names(plotDT_resp), new = c("channel", "initial response / time unit", "optimised response / time unit"))
-
-  plotDT_resp <- suppressWarnings(melt.data.table(plotDT_resp, id.vars = "channel", value.name = "response"))
-  p12 <- ggplot(plotDT_resp, aes(x = channel, y = response, fill = variable)) +
-    geom_bar(stat = "identity", width = 0.5, position = "dodge") +
-    coord_flip() +
-    scale_fill_brewer(palette = "Paired") +
-    geom_text(aes(label = round(response, 0), hjust = 1, size = 2.0),
-      position = position_dodge(width = 0.5), fontface = "bold", show.legend = FALSE
-    ) +
-    theme(
-      legend.title = element_blank(), legend.position = c(0.8, 0.2),
-      axis.text.x = element_blank(), legend.background = element_rect(
-        colour = "grey", fill = "transparent"
+  
+    # Response comparison plot
+    plotDT_resp <- plotDT_total[, c("channels", "initResponseUnit", "optmResponseUnit")][order(rank(channels))]
+    plotDT_resp[, channels := as.factor(channels)]
+    chn_levels <- plotDT_resp[, as.character(channels)]
+    plotDT_resp[, channels := factor(channels, levels = chn_levels)]
+    setnames(plotDT_resp, names(plotDT_resp), new = c("channel", "initial response / time unit", "optimised response / time unit"))
+  
+    plotDT_resp <- suppressWarnings(melt.data.table(plotDT_resp, id.vars = "channel", value.name = "response"))
+    p12 <- ggplot(plotDT_resp, aes(x = channel, y = response, fill = variable)) +
+      geom_bar(stat = "identity", width = 0.5, position = "dodge") +
+      coord_flip() +
+      scale_fill_brewer(palette = "Paired") +
+      geom_text(aes(label = round(response, 0), hjust = 1, size = 2.0),
+        position = position_dodge(width = 0.5), fontface = "bold", show.legend = FALSE
+      ) +
+      theme(
+        legend.title = element_blank(), legend.position = c(0.8, 0.2),
+        axis.text.x = element_blank(), legend.background = element_rect(
+          colour = "grey", fill = "transparent"
+        )
+      ) +
+      labs(
+        title = "Initial vs. optimised mean response",
+        subtitle = paste0(
+          "Total spend increases ", plotDT_total[
+            , round(mean(optmSpendUnitTotalDelta) * 100, 1)
+          ], "%",
+          "\nTotal response increases ", plotDT_total[
+            , round(mean(optmResponseUnitTotalLift) * 100, 1)
+          ], "% with optimised spend allocation"
+        ),
+        y = "", x = "Channels"
       )
-    ) +
-    labs(
-      title = "Initial vs. optimised mean response",
-      subtitle = paste0(
-        "Total spend increases ", plotDT_total[
-          , round(mean(optmSpendUnitTotalDelta) * 100, 1)
-        ], "%",
-        "\nTotal response increases ", plotDT_total[
-          , round(mean(optmResponseUnitTotalLift) * 100, 1)
-        ], "% with optimised spend allocation"
-      ),
-      y = "", x = "Channels"
-    )
-
-  # budget share comparison plot
-  plotDT_share <- plotDT_total[, c("channels", "initSpendShare", "optmSpendShareUnit")][order(rank(channels))]
-  plotDT_share[, channels := as.factor(channels)]
-  chn_levels <- plotDT_share[, as.character(channels)]
-  plotDT_share[, channels := factor(channels, levels = chn_levels)]
-  setnames(plotDT_share, names(plotDT_share), new = c("channel", "initial avg.spend share", "optimised avg.spend share"))
-
-  plotDT_share <- suppressWarnings(melt.data.table(plotDT_share, id.vars = "channel", value.name = "spend_share"))
-  p13 <- ggplot(plotDT_share, aes(x = channel, y = spend_share, fill = variable)) +
-    geom_bar(stat = "identity", width = 0.5, position = "dodge") +
-    coord_flip() +
-    scale_fill_brewer(palette = "Paired") +
-    geom_text(aes(label = paste0(round(spend_share * 100, 2), "%"), hjust = 1, size = 2.0),
-      position = position_dodge(width = 0.5), fontface = "bold", show.legend = FALSE
-    ) +
-    theme(
-      legend.title = element_blank(), legend.position = c(0.8, 0.2),
-      axis.text.x = element_blank(), legend.background = element_rect(
-        colour = "grey", fill = "transparent"
+  
+    # budget share comparison plot
+    plotDT_share <- plotDT_total[, c("channels", "initSpendShare", "optmSpendShareUnit")][order(rank(channels))]
+    plotDT_share[, channels := as.factor(channels)]
+    chn_levels <- plotDT_share[, as.character(channels)]
+    plotDT_share[, channels := factor(channels, levels = chn_levels)]
+    setnames(plotDT_share, names(plotDT_share), new = c("channel", "initial avg.spend share", "optimised avg.spend share"))
+  
+    plotDT_share <- suppressWarnings(melt.data.table(plotDT_share, id.vars = "channel", value.name = "spend_share"))
+    p13 <- ggplot(plotDT_share, aes(x = channel, y = spend_share, fill = variable)) +
+      geom_bar(stat = "identity", width = 0.5, position = "dodge") +
+      coord_flip() +
+      scale_fill_brewer(palette = "Paired") +
+      geom_text(aes(label = paste0(round(spend_share * 100, 2), "%"), hjust = 1, size = 2.0),
+        position = position_dodge(width = 0.5), fontface = "bold", show.legend = FALSE
+      ) +
+      theme(
+        legend.title = element_blank(), legend.position = c(0.8, 0.2),
+        axis.text.x = element_blank(), legend.background = element_rect(
+          colour = "grey", fill = "transparent"
+        )
+      ) +
+      labs(
+        title = "Initial vs. optimised budget allocation",
+        subtitle = paste0(
+          "Total spend increases ", plotDT_total[, round(mean(optmSpendUnitTotalDelta) * 100, 1)], "%",
+          "\nTotal response increases ", plotDT_total[, round(mean(optmResponseUnitTotalLift) * 100, 1)], "% with optimised spend allocation"
+        ),
+        y = "", x = "Channels"
       )
-    ) +
-    labs(
-      title = "Initial vs. optimised budget allocation",
-      subtitle = paste0(
-        "Total spend increases ", plotDT_total[, round(mean(optmSpendUnitTotalDelta) * 100, 1)], "%",
-        "\nTotal response increases ", plotDT_total[, round(mean(optmResponseUnitTotalLift) * 100, 1)], "% with optimised spend allocation"
-      ),
-      y = "", x = "Channels"
+  
+  
+    ## response curve
+  
+    plotDT_saturation <- melt.data.table(OutputCollect$mediaVecCollect[
+      solID == select_model & type == "saturatedSpendReversed"
+    ],
+    id.vars = "ds",
+    measure.vars = InputCollect$paid_media_vars, value.name = "spend", variable.name = "channel"
     )
-
-
-  ## response curve
-
-  plotDT_saturation <- melt.data.table(OutputCollect$mediaVecCollect[
-    solID == select_model & type == "saturatedSpendReversed"
-  ],
-  id.vars = "ds",
-  measure.vars = InputCollect$paid_media_vars, value.name = "spend", variable.name = "channel"
-  )
-  plotDT_decomp <- melt.data.table(OutputCollect$mediaVecCollect[
-    solID == select_model & type == "decompMedia"
-  ],
-  id.vars = "ds",
-  measure.vars = InputCollect$paid_media_vars, value.name = "response", variable.name = "channel"
-  )
-  plotDT_scurve <- cbind(plotDT_saturation, plotDT_decomp[, .(response)])
-  plotDT_scurve <- plotDT_scurve[spend >= 0] # remove outlier introduced by MM nls fitting
-  plotDT_scurveMeanResponse <- OutputCollect$xDecompAgg[solID == select_model & rn %in% InputCollect$paid_media_vars]
-  dt_optimOutScurve <- rbind(dt_optimOut[
-    , .(channels, initSpendUnit, initResponseUnit)
-  ][, type := "initial"],
-  dt_optimOut[, .(channels, optmSpendUnit, optmResponseUnit)][, type := "optimised"],
-  use.names = FALSE
-  )
-  setnames(dt_optimOutScurve, c("channels", "spend", "response", "type"))
-
-  p14 <- ggplot(data = plotDT_scurve, aes(x = spend, y = response, color = channel)) +
-    geom_line() +
-    geom_point(data = dt_optimOutScurve, aes(
-      x = spend, y = response, color = channels, shape = type
-    ), size = 2) +
-    geom_text(
-      data = dt_optimOutScurve, aes(
-        x = spend, y = response, color = channels, label = round(spend, 0)
-      ),
-      show.legend = FALSE, hjust = -0.2
-    ) +
-    theme(legend.position = c(0.9, 0.4), legend.title = element_blank()) +
-    labs(
-      title = "Response curve and mean spend by channel",
-      subtitle = paste0(
-        "rsq_train: ", plotDT_scurveMeanResponse[, round(mean(rsq_train), 4)],
-        ", nrmse = ", plotDT_scurveMeanResponse[, round(mean(nrmse), 4)],
-        ", decomp.rssd = ", plotDT_scurveMeanResponse[, round(mean(decomp.rssd), 4)],
-        ", mape.lift = ", plotDT_scurveMeanResponse[, round(mean(mape), 4)]
-      ),
-      x = "Spend", y = "response"
+    plotDT_decomp <- melt.data.table(OutputCollect$mediaVecCollect[
+      solID == select_model & type == "decompMedia"
+    ],
+    id.vars = "ds",
+    measure.vars = InputCollect$paid_media_vars, value.name = "response", variable.name = "channel"
     )
-
-  grobTitle <- paste0("Budget allocator optimum result for model ID ", select_model)
-  g <- (p13 + p12) / p14 + plot_annotation(
-    title = grobTitle, theme = theme(plot.title = element_text(hjust = 0.5))
-  )
-
-  message("Exporting charts into file: ", paste0(OutputCollect$plot_folder, select_model, "_reallocated.png"))
-  ggsave(
-    filename = paste0(OutputCollect$plot_folder, select_model, "_reallocated.png"),
-    plot = g,
-    dpi = 400, width = 18, height = 14
-  )
-
-  fwrite(dt_optimOut, paste0(OutputCollect$plot_folder, select_model, "_reallocated.csv"))
+    plotDT_scurve <- cbind(plotDT_saturation, plotDT_decomp[, .(response)])
+    plotDT_scurve <- plotDT_scurve[spend >= 0] # remove outlier introduced by MM nls fitting
+    plotDT_scurveMeanResponse <- OutputCollect$xDecompAgg[solID == select_model & rn %in% InputCollect$paid_media_vars]
+    dt_optimOutScurve <- rbind(dt_optimOut[
+      , .(channels, initSpendUnit, initResponseUnit)
+    ][, type := "initial"],
+    dt_optimOut[, .(channels, optmSpendUnit, optmResponseUnit)][, type := "optimised"],
+    use.names = FALSE
+    )
+    setnames(dt_optimOutScurve, c("channels", "spend", "response", "type"))
+  
+    p14 <- ggplot(data = plotDT_scurve, aes(x = spend, y = response, color = channel)) +
+      geom_line() +
+      geom_point(data = dt_optimOutScurve, aes(
+        x = spend, y = response, color = channels, shape = type
+      ), size = 2) +
+      geom_text(
+        data = dt_optimOutScurve, aes(
+          x = spend, y = response, color = channels, label = round(spend, 0)
+        ),
+        show.legend = FALSE, hjust = -0.2
+      ) +
+      theme(legend.position = c(0.9, 0.4), legend.title = element_blank()) +
+      labs(
+        title = "Response curve and mean spend by channel",
+        subtitle = paste0(
+          "rsq_train: ", plotDT_scurveMeanResponse[, round(mean(rsq_train), 4)],
+          ", nrmse = ", plotDT_scurveMeanResponse[, round(mean(nrmse), 4)],
+          ", decomp.rssd = ", plotDT_scurveMeanResponse[, round(mean(decomp.rssd), 4)],
+          ", mape.lift = ", plotDT_scurveMeanResponse[, round(mean(mape), 4)]
+        ),
+        x = "Spend", y = "response"
+      )
+  
+    grobTitle <- paste0("Budget allocator optimum result for model ID ", select_model)
+    g <- (p13 + p12) / p14 + plot_annotation(
+      title = grobTitle, theme = theme(plot.title = element_text(hjust = 0.5))
+    )
+  
+    message("Exporting charts into file: ", paste0(OutputCollect$plot_folder, select_model, "_reallocated.png"))
+    ggsave(
+      filename = paste0(OutputCollect$plot_folder, select_model, "_reallocated.png"),
+      plot = g,
+      dpi = 400, width = 18, height = 14
+    )
+  }
+  
+  if (isTRUE(save_csv)){
+    fwrite(dt_optimOut, paste0(OutputCollect$plot_folder, select_model, "_reallocated.csv"))
+  }
 
   if (ui) {
     ui <- list(p12 = p12, p13 = p13, p14 = p14)
