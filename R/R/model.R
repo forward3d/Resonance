@@ -495,6 +495,7 @@ robyn_run <- function(InputCollect,
       # plotMediaShareLoopLine[, variable:= "roi_total"]
       ySecScale <- max(plotMediaShareLoopLine$value) / max(plotMediaShareLoopBar$value) * 1.1
 
+      # print('davenote - p1')
       p1 <- ggplot(plotMediaShareLoopBar, aes(x = rn, y = value, fill = variable)) +
         geom_bar(stat = "identity", width = 0.5, position = "dodge") +
         geom_text(aes(label = paste0(round(value * 100, 2), "%")), color = "darkblue", position = position_dodge(width = 0.5), fontface = "bold") +
@@ -528,6 +529,7 @@ robyn_run <- function(InputCollect,
                                rn = as.factor(rn),
                                sign = as.factor(ifelse(xDecompPerc >= 0, "pos", "neg")))]
 
+      # print('davenote - p2')
       p2 <- suppressWarnings(
         ggplot(plotWaterfallLoop, aes(x = id, fill = sign)) +
           geom_rect(aes(x = rn, xmin = id - 0.45, xmax = id + 0.45, ymin = end, ymax = start), stat = "identity") +
@@ -560,6 +562,7 @@ robyn_run <- function(InputCollect,
         hypParam_thetas <- hypParam[paste0(InputCollect$all_media, "_thetas")]
         dt_geometric <- data.table(channels = InputCollect$all_media, thetas = hypParam_thetas)
 
+        # print('davenote - p3')
         p3 <- ggplot(dt_geometric, aes(x = channels, y = thetas, fill = "coral")) +
           geom_bar(stat = "identity", width = 0.5) +
           theme(legend.position = "none") +
@@ -775,6 +778,7 @@ robyn_run <- function(InputCollect,
       dave = as.data.frame(med_list)
       dave_melt = dave %>% data.table::as.data.table() %>% data.table::melt(id.vars='x',variable.name='channel',value.name='response')
       
+      # print('davenote - p4')
       p4 <- ggplot(data = dave_melt, aes(x = x, y = response, color = channel)) +
         geom_line() +
         # geom_point() +
@@ -828,6 +832,7 @@ robyn_run <- function(InputCollect,
       setnames(xDecompVecPlot, old = c("ds", "dep_var", "depVarHat"), new = c("ds", "actual", "predicted"))
       suppressWarnings(xDecompVecPlotMelted <- melt.data.table(xDecompVecPlot, id.vars = "ds"))
 
+      # print('davenote - p5')
       p5 <- ggplot(xDecompVecPlotMelted, aes(x = ds, y = value, color = variable)) +
         geom_line() +
         theme(legend.position = c(0.9, 0.9)) +
@@ -864,7 +869,7 @@ robyn_run <- function(InputCollect,
       x = xDecompVecPlot$predicted[keep_indices]
       y = xDecompVecPlot$actual[keep_indices] - xDecompVecPlot$predicted[keep_indices]
       
-      
+      # print('davenote - p6')
       p6 <- qplot(x = x, y = y) +
         geom_hline(yintercept = 0) +
         geom_smooth(se = TRUE, method = "loess", formula = "y ~ x") +

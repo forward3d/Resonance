@@ -339,10 +339,10 @@ check_adstock <- function(adstock) {
 
 check_hyperparameters <- function(hyperparameters = NULL, adstock = NULL, all_media = NULL) {
   if (is.null(hyperparameters)) {
-    message(paste(
-      "'hyperparameters' are not provided yet. To include them, run",
-      "robyn_inputs(InputCollect = InputCollect, hyperparameters = ...)"
-    ))
+    # message(paste(
+    #   "'hyperparameters' are not provided yet. To include them, run",
+    #   "robyn_inputs(InputCollect = InputCollect, hyperparameters = ...)"
+    # ))
   } else {
     local_name <- hyper_names(adstock, all_media)
     if (!identical(sort(names(hyperparameters)), local_name)) {
