@@ -12,6 +12,7 @@
 #' variable spends that maximizes the total media response.
 #'
 #' @inheritParams robyn_run
+#' @inheritParams robyn_outputs
 #' @param robyn_object Character. Path of the \code{Robyn.RDS} object
 #' that contains all previous modeling information.
 #' @param select_build Integer. Default to the latest model build. \code{select_buil = 0}
@@ -268,7 +269,7 @@ robyn_allocator <- function(robyn_object = NULL,
   coefsFiltered <- coefs[mediaVarSortedFiltered]
 
   ## build evaluation funciton
-  if (any(InputCollect$costSelector)) {
+  if (!is.null(spendExpoMod)) {
     mm_lm_coefs <- spendExpoMod$coef_lm
     names(mm_lm_coefs) <- spendExpoMod$channel
   } else {
@@ -482,8 +483,6 @@ robyn_allocator <- function(robyn_object = NULL,
     )
   }
 
-  # print(nlsMod)
-
   ## collect output
 
   dt_bestModel <- dt_bestCoef[, .(rn, mean_spend, xDecompAgg, roi_total, roi_mean)][order(rank(rn))]
@@ -513,23 +512,22 @@ robyn_allocator <- function(robyn_object = NULL,
   )
 
   dt_optimOut[, optmResponseUnitTotalLift := (optmResponseUnitTotal / initResponseUnitTotal) - 1]
-  # print(dt_optimOut)
 
   if (isTRUE(plot_graphs)){
-  
+
     ## plot allocator results
-  
+
     plotDT_total <- copy(dt_optimOut) # plotDT_total <- optim_result$dt_optimOut
-  
+
     # ROI comparison plot
-  
+
     plotDT_roi <- plotDT_total[, c("channels", "initRoiUnit", "optmRoiUnit")][order(rank(channels))]
     plotDT_roi[, channels := as.factor(channels)]
     chn_levels <- plotDT_roi[, as.character(channels)]
     plotDT_roi[, channels := factor(channels, levels = chn_levels)]
     setnames(plotDT_roi, names(plotDT_roi), new = c("channel", "initial roi", "optimised roi"))
-  
-  
+
+
     plotDT_roi <- suppressWarnings(melt.data.table(plotDT_roi, id.vars = "channel", value.name = "roi"))
     p11 <- ggplot(plotDT_roi, aes(x = channel, y = roi, fill = variable)) +
       geom_bar(stat = "identity", width = 0.5, position = "dodge") +
@@ -556,14 +554,14 @@ robyn_allocator <- function(robyn_object = NULL,
         ),
         y = "", x = "Channels"
       )
-  
+
     # Response comparison plot
     plotDT_resp <- plotDT_total[, c("channels", "initResponseUnit", "optmResponseUnit")][order(rank(channels))]
     plotDT_resp[, channels := as.factor(channels)]
     chn_levels <- plotDT_resp[, as.character(channels)]
     plotDT_resp[, channels := factor(channels, levels = chn_levels)]
     setnames(plotDT_resp, names(plotDT_resp), new = c("channel", "initial response / time unit", "optimised response / time unit"))
-  
+
     plotDT_resp <- suppressWarnings(melt.data.table(plotDT_resp, id.vars = "channel", value.name = "response"))
     p12 <- ggplot(plotDT_resp, aes(x = channel, y = response, fill = variable)) +
       geom_bar(stat = "identity", width = 0.5, position = "dodge") +
@@ -590,14 +588,14 @@ robyn_allocator <- function(robyn_object = NULL,
         ),
         y = "", x = "Channels"
       )
-  
+
     # budget share comparison plot
     plotDT_share <- plotDT_total[, c("channels", "initSpendShare", "optmSpendShareUnit")][order(rank(channels))]
     plotDT_share[, channels := as.factor(channels)]
     chn_levels <- plotDT_share[, as.character(channels)]
     plotDT_share[, channels := factor(channels, levels = chn_levels)]
     setnames(plotDT_share, names(plotDT_share), new = c("channel", "initial avg.spend share", "optimised avg.spend share"))
-  
+
     plotDT_share <- suppressWarnings(melt.data.table(plotDT_share, id.vars = "channel", value.name = "spend_share"))
     p13 <- ggplot(plotDT_share, aes(x = channel, y = spend_share, fill = variable)) +
       geom_bar(stat = "identity", width = 0.5, position = "dodge") +
@@ -620,10 +618,10 @@ robyn_allocator <- function(robyn_object = NULL,
         ),
         y = "", x = "Channels"
       )
-  
-  
+
+
     ## response curve
-  
+
     plotDT_saturation <- melt.data.table(OutputCollect$mediaVecCollect[
       solID == select_model & type == "saturatedSpendReversed"
     ],
@@ -646,7 +644,7 @@ robyn_allocator <- function(robyn_object = NULL,
     use.names = FALSE
     )
     setnames(dt_optimOutScurve, c("channels", "spend", "response", "type"))
-  
+
     p14 <- ggplot(data = plotDT_scurve, aes(x = spend, y = response, color = channel)) +
       geom_line() +
       geom_point(data = dt_optimOutScurve, aes(
@@ -670,22 +668,20 @@ robyn_allocator <- function(robyn_object = NULL,
         x = "Spend", y = "response"
       )
   
-    grobTitle <- paste0("Budget allocator optimum result for model ID ", select_model)
-    g <- (p13 + p12) / p14 + plot_annotation(
-      title = grobTitle, theme = theme(plot.title = element_text(hjust = 0.5))
-    )
-  
-    message("Exporting charts into file: ", paste0(OutputCollect$plot_folder, select_model, "_reallocated.png"))
-    ggsave(
-      filename = paste0(OutputCollect$plot_folder, select_model, "_reallocated.png"),
-      plot = g,
-      dpi = 400, width = 18, height = 14
-    )
-  }
-  
-  if (isTRUE(save_csv)){
-    fwrite(dt_optimOut, paste0(OutputCollect$plot_folder, select_model, "_reallocated.csv"))
-  }
+
+  grobTitle <- paste0("Budget allocator optimum result for model ID ", select_model)
+  g <- (p13 + p12) / p14 + plot_annotation(
+    title = grobTitle, theme = theme(plot.title = element_text(hjust = 0.5))
+  )
+
+  message("Exporting charts into file: ", paste0(OutputCollect$plot_folder, select_model, "_reallocated.png"))
+  ggsave(
+    filename = paste0(OutputCollect$plot_folder, select_model, "_reallocated.png"),
+    plot = g,
+    dpi = 400, width = 18, height = 14, limitsize = FALSE
+  )
+
+  fwrite(dt_optimOut, paste0(OutputCollect$plot_folder, select_model, "_reallocated.csv"))
 
   if (ui) {
     ui <- list(p12 = p12, p13 = p13, p14 = p14)

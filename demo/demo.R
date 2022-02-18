@@ -1,18 +1,18 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
+# Copyright (c) Meta Platforms, Inc. and its affiliates.
 
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-#############################################################################################
-####################         Facebook MMM Open Source - Robyn 3.4.7    ######################
-####################                    Quick guide                   #######################
-#############################################################################################
+####################################################################################
+################         Meta MMM Open Source - Robyn 3.5       ####################
+################                  Quick guide                   ####################
+####################################################################################
 
 ################################################################
 #### Step 0: setup environment
 
 ## Install and load libraries
-# install.packages("remotes") # Install remotes first if not already happend
+# install.packages("remotes") # Install remotes first if you haven't already
 library(Robyn) # remotes::install_github("facebookexperimental/Robyn/R")
 set.seed(123)
 
@@ -21,12 +21,14 @@ Sys.setenv(R_FUTURE_FORK_ENABLE="true")
 options(future.fork.enable = TRUE)
 
 ## Must install the python library Nevergrad once
-## ATTENTION: The latest Python 3.10 version will cause Nevergrad installation error
+## ATTENTION: The latest Python 3.10 version may cause Nevergrad installation error
 ## See here for more info about installing Python packages via reticulate
 ## https://rstudio.github.io/reticulate/articles/python_packages.html
 
-## Load library(reticulate)
-## Option 1: nevergrad installation via PIP
+# install.packages("reticulate") # Install reticulate first if you haven't already
+# library("reticulate") # Load the library
+
+## Option 1: nevergrad installation via PIP (no additional installs)
 # virtualenv_create("r-reticulate")
 # use_virtualenv("r-reticulate", required = TRUE)
 # py_install("nevergrad", pip = TRUE)
@@ -35,7 +37,7 @@ options(future.fork.enable = TRUE)
 # Sys.setenv(RETICULATE_PYTHON = "~/.virtualenvs/r-reticulate/bin/python")
 # Reset your R session and re-install Nevergrad with option 1
 
-## Option 2: nevergrad installation via conda
+## Option 2: nevergrad installation via conda (must have conda installed)
 # conda_create("r-reticulate", "Python 3.9") # Only works with <= Python 3.9 sofar
 # use_condaenv("r-reticulate")
 # conda_install("r-reticulate", "nevergrad", pip=TRUE)
@@ -86,7 +88,7 @@ InputCollect <- robyn_inputs(
   # are provided and case-sensitive. Recommended to at least keep Trend & Holidays
   ,prophet_signs = c("default","default", "default") # c("default", "positive", and "negative").
   # Recommend as default.Must be same length as prophet_vars
-  ,prophet_country = "DE"# only one country allowed once. Including national holidays
+  ,prophet_country = "DE" # only one country allowed once. Including national holidays
   # for 59 countries, whose list can be found on our github guide
 
   ,context_vars = c("competitor_sales_B", "events") # typically competitors, price &
@@ -124,12 +126,13 @@ InputCollect <- robyn_inputs(
   # due to the changing decay rate over time, as opposed to the fixed decay rate for geometric. weibull_pdf
   # allows also lagging effect. Yet weibull adstocks are two-parametric and thus take longer to run.
   ,iterations = 2000  # number of allowed iterations per trial. For the simulated dataset with 11 independent
-  # variables, 2000 is recommended for Geometric adsttock, 4000 for weibull_cdf and 6000 for weibull_pdf.
+  # variables, 2000 is recommended for Geometric adstock, 4000 for weibull_cdf and 6000 for weibull_pdf.
   # The larger the dataset, the more iterations required to reach convergence.
 
+  ,intercept_sign = "non_negative" # intercept_sign input must be any of: non_negative, unconstrained
   ,nevergrad_algo = "TwoPointsDE" # recommended algorithm for Nevergrad, the gradient-free
   # optimisation library https://facebookresearch.github.io/nevergrad/index.html
-  ,trials = 5 # number of allowed iterations per trial. 5 is recommended without calibration,
+  ,trials = 5 # number of allowed trials. 5 is recommended without calibration,
   # 10 with calibration.
 
   # Time estimation: with geometric adstock, 2000 iterations * 5 trials
@@ -146,7 +149,7 @@ plot_adstock(plot = FALSE)
 plot_saturation(plot = FALSE)
 
 ## 2. Get correct hyperparameter names:
-# All variables in paid_media_vars or organic_vars require hyperprameter and will be
+# All variables in paid_media_vars or organic_vars require hyperparameter and will be
 # transformed by adstock & saturation.
 # Difference between paid_media_vars and organic_vars is that paid_media_vars has spend that
 # needs to be specified in paid_media_spends specifically.
@@ -194,6 +197,7 @@ plot_saturation(plot = FALSE)
 # or only one value (in which case you've "fixed" that hyperparameter)
 
 # Run ?hyper_names to check parameter definition
+# Run hyper_limits() to check valid upper and lower bounds by range
 hyper_names(adstock = InputCollect$adstock, all_media = InputCollect$all_media)
 
 # Example hyperparameters for Geometric adstock
@@ -303,17 +307,26 @@ InputCollect <- robyn_inputs(InputCollect = InputCollect, hyperparameters = hype
 ################################################################
 #### Step 3: Build initial model
 
-# Run ?robyn_run to check parameter definition
-OutputCollect <- robyn_run(
+# Run all trials and iterations
+# Use ?robyn_run to check parameter definition
+OutputModels <- robyn_run(
   InputCollect = InputCollect # feed in all model specification
-  , plot_folder = robyn_object # plots will be saved in the same folder as robyn_object
-  , pareto_fronts = 3
-  , plot_pareto = TRUE
-  # , calibration_constraint = 0.1 # run ?robyn_run to see description
-  # , lambda_control = 1 # run ?robyn_run to see description
-  )
+  # , lambda_control = 1 # range from 0-1 & default at 1. Details see ?robyn_run
+  , outputs = FALSE # outputs = FALSE disables direct model output
+)
 
-## Besides one-pager plots: there are 4 csv output saved in the folder for further usage
+# Output results and plots & export into local files
+OutputCollect <- robyn_outputs(
+  InputCollect, OutputModels
+  , pareto_fronts = 1 # decrease pareto_fronts to get less output models
+  # , calibration_constraint = 0.1 # range c(0.01, 0.1) & default at 0.1. Details see ?robyn_outputs
+  , csv_out = "pareto" # "pareto" or "all"
+  , clusters = TRUE # Set to TRUE to help reduce and select best models based on robyn_clusters()
+  , plot_pareto = TRUE # Set to FALSE to deactivate plotting and saving model one-pagers
+  , plot_folder = robyn_object # plots will be saved in the same folder as robyn_object
+)
+
+## Besides one-pager and clusters plots: there are 4 csv output saved in the folder for further usage
 # pareto_hyperparameters.csv, hyperparameters per Pareto output model
 # pareto_aggregated.csv, aggregated decomposition per independent variable of all Pareto output
 # pareto_media_transform_matrix.csv, all media transformation vectors
@@ -323,11 +336,19 @@ OutputCollect <- robyn_run(
 ################################################################
 #### Step 4: Select and save the initial model
 
-## Compare all model onepagers in the plot folder and select one that mostly represents
+## Compare all model one-pagers in the plot folder and select one that mostly represents
 ## your business reality
 
+## Select winning model based on minimum combined error by ROI cluster using robyn_clusters()
+## You can check OutputCollect$clusters information or manually run it with custom parameters
+# cls <- robyn_clusters(OutputCollect,
+#                       all_media = InputCollect$all_media,
+#                       k = 5, limit = 1,
+#                       weights = c(1, 1, 1.5))
+
 OutputCollect$allSolutions # get all model IDs in result
-select_model <- "1_4_2" # select one from above
+# OutputCollect$clusters$models # or from reduced results when using robyn_clusters()
+select_model <- "2_13_4" # select one from above
 robyn_save(robyn_object = robyn_object # model object location and name
            , select_model = select_model # selected model ID
            , InputCollect = InputCollect # all model input
@@ -412,6 +433,7 @@ Robyn <- robyn_refresh(
   , refresh_iters = 1000 # Iteration for refresh. 600 is rough estimation. We'll still
   # figuring out what's the ideal number.
   , refresh_trials = 3
+  , clusters = TRUE
 )
 
 ## Besides plots: there're 4 csv output saved in the folder for further usage
