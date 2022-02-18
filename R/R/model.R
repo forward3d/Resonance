@@ -56,7 +56,7 @@ robyn_run <- function(InputCollect,
   #### Run robyn_mmm on set_trials
 
   hyper_fixed <- check_hyper_fixed(InputCollect, dt_hyper_fixed)
-  OutputModels <- robyn_train(InputCollect, dt_hyper_fixed, lambda_control, refresh, seed, quiet)
+  OutputModels <- robyn_train(InputCollect, dt_hyper_fixed, lambda_control, refresh, seed, quiet, regression_methodology)
   attr(OutputModels, "hyper_fixed") <- hyper_fixed
   attr(OutputModels, "refresh") <- refresh
 
@@ -95,7 +95,8 @@ robyn_run <- function(InputCollect,
 #' @export
 robyn_train <- function(InputCollect, dt_hyper_fixed = NULL,
                         lambda_control = 1, refresh = FALSE,
-                        seed = 123, quiet = FALSE) {
+                        seed = 123, quiet = FALSE,
+                        regression_methodology = "lame_way") {
 
   hyper_fixed <- check_hyper_fixed(InputCollect, dt_hyper_fixed)
 
@@ -1092,85 +1093,87 @@ calibrate_mmm <- function(decompCollect, calibration_input, paid_media_vars, day
 }
 
 
-model_refit <- function(x_train, y_train, lambda, lower.limits, upper.limits, intercept_sign = "non_negative") {
-  mod <- glmnet(
-    x_train,
-    y_train,
-    family = "gaussian",
-    alpha = 0, # 0 for ridge regression
-    # https://stats.stackexchange.com/questions/138569/why-is-lambda-within-one-standard-error-from-the-minimum-is-a-recommended-valu
-    lambda = lambda,
-    lower.limits = lower.limits,
-    upper.limits = upper.limits
-  ) # coef(mod)
-
-  df.int <- 1
-
-  ## drop intercept if negative and intercept_sign == "non_negative"
-  opts <- c("non_negative", "unconstrained")
-  if (!intercept_sign %in% opts)
-    stop(sprintf("intercept_sign input must be any of: %s", paste(opts, collapse = ", ")))
-  if (intercept_sign == "non_negative" & coef(mod)[1] < 0) {
-    mod <- glmnet(
-    x_train,
-    y_train,
-    family = "gaussian",
-    alpha = 0, # 0 for ridge regression
-    # https://stats.stackexchange.com/questions/138569/why-is-lambda-within-one-standard-error-from-the-minimum-is-a-recommended-valu
-    lambda = lambda,
-    lower.limits = lower.limits,
-    upper.limits = upper.limits
-  ) # coef(mod)
-
-  df.int <- 1
-
-  ## drop intercept if negative and intercept_sign == "non_negative"
-  opts <- c("non_negative", "unconstrained")
-  if (!intercept_sign %in% opts)
-    stop(sprintf("intercept_sign input must be any of: %s", paste(opts, collapse = ", ")))
-  if (intercept_sign == "non_negative" & coef(mod)[1] < 0) {
+model_refit <- function(x_train, y_train, lambda, lower.limits, upper.limits, intercept_sign = "non_negative", regression_methodology) {
+  if (regression_methodology == 'lame_way') {
     mod <- glmnet(
       x_train,
       y_train,
       family = "gaussian",
-      alpha = 0 # 0 for ridge regression
-      , lambda = lambda,
+      alpha = 0, # 0 for ridge regression
+      # https://stats.stackexchange.com/questions/138569/why-is-lambda-within-one-standard-error-from-the-minimum-is-a-recommended-valu
+      lambda = lambda,
       lower.limits = lower.limits,
-      upper.limits = upper.limits,
-      intercept = FALSE
+      upper.limits = upper.limits
     ) # coef(mod)
-    df.int <- 0
+  
+    df.int <- 1
+  
+    ## drop intercept if negative and intercept_sign == "non_negative"
+    opts <- c("non_negative", "unconstrained")
+    if (!intercept_sign %in% opts)
+      stop(sprintf("intercept_sign input must be any of: %s", paste(opts, collapse = ", ")))
+    if (intercept_sign == "non_negative" & coef(mod)[1] < 0) {
+      mod <- glmnet(
+      x_train,
+      y_train,
+      family = "gaussian",
+      alpha = 0, # 0 for ridge regression
+      # https://stats.stackexchange.com/questions/138569/why-is-lambda-within-one-standard-error-from-the-minimum-is-a-recommended-valu
+      lambda = lambda,
+      lower.limits = lower.limits,
+      upper.limits = upper.limits
+    ) # coef(mod)
+  
+    df.int <- 1
   } # ; plot(mod); print(mod)
-
-  y_trainPred <- predict(mod, s = lambda, newx = x_train)
-  rsq_train <- get_rsq(true = y_train, predicted = y_trainPred, p = ncol(x_train), df.int = df.int)
-  rsq_train
-
-  # y_testPred <- predict(mod, s = lambda, newx = x_test)
-  # rsq_test <- get_rsq(true = y_test, predicted = y_testPred); rsq_test
-
-  # mape_mod<- mean(abs((y_test - y_testPred)/y_test)* 100); mape_mod
-  coefs <- as.matrix(coef(mod))
-  # y_pred <- c(y_trainPred, y_testPred)
-
-  # mean(y_train) sd(y_train)
-  nrmse_train <- sqrt(mean((y_train - y_trainPred)^2)) / (max(y_train) - min(y_train))
-  # nrmse_test <- sqrt(mean(sum((y_test - y_testPred)^2))) /
-  # (max(y_test) - min(y_test)) # mean(y_test) sd(y_test)
-
-  mod_out <- list(
-    rsq_train = rsq_train
-    # ,rsq_test = rsq_test
-    , nrmse_train = nrmse_train
-    # ,nrmse_test = nrmse_test
-    # ,mape_mod = mape_mod
-    , coefs = coefs,
-    y_pred = y_trainPred,
-    mod = mod,
-    df.int = df.int
-  )
-
-
+  
+    ## drop intercept if negative and intercept_sign == "non_negative"
+    opts <- c("non_negative", "unconstrained")
+    if (!intercept_sign %in% opts)
+      stop(sprintf("intercept_sign input must be any of: %s", paste(opts, collapse = ", ")))
+    if (intercept_sign == "non_negative" & coef(mod)[1] < 0) {
+      mod <- glmnet(
+        x_train,
+        y_train,
+        family = "gaussian",
+        alpha = 0 # 0 for ridge regression
+        , lambda = lambda,
+        lower.limits = lower.limits,
+        upper.limits = upper.limits,
+        intercept = FALSE
+      ) # coef(mod)
+      df.int <- 0
+    } # ; plot(mod); print(mod)
+  
+    y_trainPred <- predict(mod, s = lambda, newx = x_train)
+    rsq_train <- get_rsq(true = y_train, predicted = y_trainPred, p = ncol(x_train), df.int = df.int)
+    rsq_train
+  
+    # y_testPred <- predict(mod, s = lambda, newx = x_test)
+    # rsq_test <- get_rsq(true = y_test, predicted = y_testPred); rsq_test
+  
+    # mape_mod<- mean(abs((y_test - y_testPred)/y_test)* 100); mape_mod
+    coefs <- as.matrix(coef(mod))
+    # y_pred <- c(y_trainPred, y_testPred)
+  
+    # mean(y_train) sd(y_train)
+    nrmse_train <- sqrt(mean((y_train - y_trainPred)^2)) / (max(y_train) - min(y_train))
+    # nrmse_test <- sqrt(mean(sum((y_test - y_testPred)^2))) /
+    # (max(y_test) - min(y_test)) # mean(y_test) sd(y_test)
+  
+    mod_out <- list(
+      rsq_train = rsq_train
+      # ,rsq_test = rsq_test
+      , nrmse_train = nrmse_train
+      # ,nrmse_test = nrmse_test
+      # ,mape_mod = mape_mod
+      , coefs = coefs,
+      y_pred = y_trainPred,
+      mod = mod,
+      df.int = df.int
+    )
+  
+  
     return(mod_out)}
   else if (regression_methodology == 'dave_way') {
     library(ConsReg)

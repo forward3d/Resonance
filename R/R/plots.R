@@ -317,23 +317,64 @@ robyn_onepagers <- function(InputCollect, OutputCollect, selected = NULL, quiet 
       ## 4. Response curve
       dt_scurvePlot <- temp[[sid]]$plot4data$dt_scurvePlot
       dt_scurvePlotMean <- temp[[sid]]$plot4data$dt_scurvePlotMean
-      p4 <- ggplot(dt_scurvePlot[dt_scurvePlot$channel %in% InputCollect$paid_media_vars,],
-                   aes(x = .data$spend, y = .data$response, color = .data$channel)) +
+      
+      #####################
+      ### DJ play start ###
+      #####################
+      
+      # p4 <- ggplot(dt_scurvePlot[dt_scurvePlot$channel %in% InputCollect$paid_media_vars,],
+      #              aes(x = .data$spend, y = .data$response, color = .data$channel)) +
+      #   geom_line() +
+      #   geom_point(data = dt_scurvePlotMean, aes(x = .data$mean_spend, y = .data$mean_response, color = .data$channel)) +
+      #   geom_text(data = dt_scurvePlotMean, aes(x = .data$mean_spend, y = .data$mean_response, label = round(.data$mean_spend, 0)),
+      #             show.legend = FALSE, hjust = -0.2) +
+      #   theme(legend.position = c(0.9, 0.2)) +
+      #   labs(
+      #     title = "Response curve and mean spend by channel",
+      #     subtitle = paste0(
+      #       "rsq_train: ", rsq_train_plot,
+      #       ", nrmse = ", nrmse_plot,
+      #       ", decomp.rssd = ", decomp_rssd_plot,
+      #       ifelse(!is.na(mape_lift_plot), paste0(", mape.lift = ", mape_lift_plot), "")
+      #     ),
+      #     x = "Spend", y = "Response"
+      #   )
+      
+      hypParam = OutputCollect$resultHypParam[solID == sid]
+      
+      med_list = list()
+      med_list[['x']] = seq(0,1,0.001)
+      for (med in 1:length(InputCollect$paid_media_vars)) {
+        med_select <- InputCollect$paid_media_vars[med]
+        alpha <- hypParam[[paste0(InputCollect$paid_media_vars[med], "_alphas")]]
+        gamma <- hypParam[[paste0(InputCollect$paid_media_vars[med], "_gammas")]]
+        med_list[[med_select]] = saturation_hill(x = med_list[['x']], alpha = alpha, gamma = gamma)
+      }
+      
+      dave = as.data.frame(med_list)
+      dave_melt = dave %>% data.table::as.data.table() %>% data.table::melt(id.vars='x',variable.name='channel',value.name='response')
+      
+      # print('davenote - p4')
+      p4 <- ggplot(data = dave_melt, aes(x = x, y = response, color = channel)) +
         geom_line() +
-        geom_point(data = dt_scurvePlotMean, aes(x = .data$mean_spend, y = .data$mean_response, color = .data$channel)) +
-        geom_text(data = dt_scurvePlotMean, aes(x = .data$mean_spend, y = .data$mean_response, label = round(.data$mean_spend, 0)),
-                  show.legend = FALSE, hjust = -0.2) +
+        # geom_point() +
+        # geom_point(data = dt_scurvePlotMean, aes(x = mean_spend, y = mean_response, color = channel)) +
+        # geom_text(data = dt_scurvePlotMean, aes(x = mean_spend, y = mean_response, label = round(mean_spend, 0)), show.legend = FALSE, hjust = -0.2) +
         theme(legend.position = c(0.9, 0.2)) +
         labs(
-          title = "Response curve and mean spend by channel",
+          title = "saturation curves per channel",
           subtitle = paste0(
             "rsq_train: ", rsq_train_plot,
             ", nrmse = ", nrmse_plot,
             ", decomp.rssd = ", decomp_rssd_plot,
-            ifelse(!is.na(mape_lift_plot), paste0(", mape.lift = ", mape_lift_plot), "")
+            ", mape.lift = ", mape_lift_plot
           ),
-          x = "Spend", y = "Response"
+          x = "Normalised Spend", y = "Normalised Response"
         )
+      
+      ###################
+      ### DJ play end ###
+      ###################
 
       ## 5. Fitted vs actual
       xDecompVecPlotMelted <- temp[[sid]]$plot5data$xDecompVecPlotMelted
@@ -353,10 +394,36 @@ robyn_onepagers <- function(InputCollect, OutputCollect, selected = NULL, quiet 
 
       ## 6. Diagnostic: fitted vs residual
       xDecompVecPlot <- temp[[sid]]$plot6data$xDecompVecPlot
-      p6 <- qplot(x = .data$predicted, y = .data$actual - .data$predicted, data = xDecompVecPlot) +
+      
+      #####################
+      ### DJ play start ###
+      #####################
+      
+      # p6 <- qplot(x = .data$predicted, y = .data$actual - .data$predicted, data = xDecompVecPlot) +
+      #   geom_hline(yintercept = 0) +
+      #   geom_smooth(se = TRUE, method = "loess", formula = "y ~ x") +
+      #   xlab("Fitted") + ylab("Residual") + ggtitle("Fitted vs. Residual")
+      
+      actuals_iqr = IQR(xDecompVecPlot$actual)
+      actuals_1qr = summary(xDecompVecPlot$actual)[[2]]
+      actuals_3qr = summary(xDecompVecPlot$actual)[[5]]
+      
+      LowerInnerFence <- actuals_1qr - 1.5 * actuals_iqr
+      UpperInnerFence <- actuals_3qr + 1.5 * actuals_iqr
+      keep_indices = which(xDecompVecPlot$actual < UpperInnerFence & xDecompVecPlot$actual > LowerInnerFence)
+      
+      x = xDecompVecPlot$predicted[keep_indices]
+      y = xDecompVecPlot$actual[keep_indices] - xDecompVecPlot$predicted[keep_indices]
+      
+      # print('davenote - p6')
+      p6 <- qplot(x = x, y = y) +
         geom_hline(yintercept = 0) +
         geom_smooth(se = TRUE, method = "loess", formula = "y ~ x") +
-        xlab("Fitted") + ylab("Residual") + ggtitle("Fitted vs. Residual")
+        xlab("fitted") + ylab("resid") + ggtitle("fitted vs. residual")
+      
+      ###################
+      ### DJ play end ###
+      ###################
 
       ## Aggregate one-pager plots and export
       onepagerTitle <- paste0("Model one-pager, on pareto front ", pf, ", ID: ", sid)

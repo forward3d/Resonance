@@ -669,17 +669,18 @@ robyn_allocator <- function(robyn_object = NULL,
       )
   
 
-  grobTitle <- paste0("Budget allocator optimum result for model ID ", select_model)
-  g <- (p13 + p12) / p14 + plot_annotation(
-    title = grobTitle, theme = theme(plot.title = element_text(hjust = 0.5))
-  )
-
-  message("Exporting charts into file: ", paste0(OutputCollect$plot_folder, select_model, "_reallocated.png"))
-  ggsave(
-    filename = paste0(OutputCollect$plot_folder, select_model, "_reallocated.png"),
-    plot = g,
-    dpi = 400, width = 18, height = 14, limitsize = FALSE
-  )
+    grobTitle <- paste0("Budget allocator optimum result for model ID ", select_model)
+    g <- (p13 + p12) / p14 + plot_annotation(
+      title = grobTitle, theme = theme(plot.title = element_text(hjust = 0.5))
+    )
+  
+    message("Exporting charts into file: ", paste0(OutputCollect$plot_folder, select_model, "_reallocated.png"))
+    ggsave(
+      filename = paste0(OutputCollect$plot_folder, select_model, "_reallocated.png"),
+      plot = g,
+      dpi = 400, width = 18, height = 14, limitsize = FALSE
+    )
+  }
 
   fwrite(dt_optimOut, paste0(OutputCollect$plot_folder, select_model, "_reallocated.csv"))
 
